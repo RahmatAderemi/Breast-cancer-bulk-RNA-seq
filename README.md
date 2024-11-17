@@ -9,7 +9,7 @@ Bulk RNA-seq data was sourced from NCBI SRA and were downloaded on to Galaxy pla
 Paired end reads with satisfactory quality were aligned to the human reference genome hg38 with the STAR (Version 2.7.11a) mapper on Galaxy using the default parameters on galaxy.
 
 ## Gene expression counts-
-The expression counts for the resulting BAM were quantified using featureCount (subread version 2.0.3) on Galaxy. The specified strand information was unstranded and asked to count the paired end reads as one fragment. The gene annotation file was the featureCount built in for human hg38 genome.
+The expression counts for the resulting BAM were quantified using featureCount (subread version 2.0.3) on Galaxy. The specified strand information was unstranded and the paired end reads were counted as one fragment. The gene annotation file was the featureCount built in for human hg38 genome.
 
 ## Differential gene expression analysis-
 The differential gene expression analysis was carried out using DESeq2 package on R. Steps are in the RMarkdown document.
