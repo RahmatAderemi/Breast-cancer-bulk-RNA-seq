@@ -145,35 +145,61 @@ keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
 dds <- dds[keep,]
 dds
 ```
-```{r}
-levels(dds$Subtype)
-
-```
-```{r}
-design(dds)
-```
 
 # Exploratory data analysis
-.
+## Estimate sequencing depth
+```{r}
+dds <- estimateSizeFactors(dds)
+plot(sizeFactors(dds), colSums(counts(dds)))
+abline(lm(colSums(counts(dds))~ sizeFactors(dds)))
+```
+
 ## Data transformation and Variance stabilization
 ```{r}
-vsd <- vst(dds)
-vsd
+rls <- rlog(dds)
+plot(assay(rls)[,1], assay(rls)[,2], cex= .1)
 ```
 ```{r}
 library(vsn)
-meanSdPlot(assay(vsd))
+meanSdPlot(assay(rls), main ="rlog transformation", ranks = FALSE)
 ```
 ```{r}
-plotPCA(vsd, intgroup = "Subtype")
+plotPCA(rls, intgroup = "Subtype")
 ```
 ```{r}
-plotPCA(vsd, intgroup= "Location")
+plotPCA(rls, intgroup= "Location")
+```
+
+## Hierarchical clustering
+```{r}
+plot(hclust(dist(t(assay(rls)))), labels= colData(rls)$Subtype)
+```
+# There might be some batch effects in the data. 
+```{r}
+library(sva)
+idx= rowMeans(counts(dds, normalized= TRUE)) >1
+dat <- counts(dds, normalized= TRUE)[idx,]
+mod<- model.matrix(~ Subtype, colData(dds))
+mod0 <- model.matrix(~1, colData(dds))
+
+svBC <- svaseq(dat, mod, mod0, n.sv = 2)
+dds$Location <- as.factor(dds$Location)
+plot(svBC$sv[,1], svBC$sv[,2], col= dds$Location)
+
+```
+```{r}
+dds.sva <- dds
+dds.sva$SV1 <- svBC$sv[,1]
+dds.sva$SV2 <- svBC$sv[,2]
+design(dds.sva) <- ~ SV1 + SV2 + Subtype
 ```
 
 # Differential gene expression analysis
 ```{r}
-dds1 <- DESeq(dds)
+dds1 <- DESeq(dds.sva)
+```
+```{r}
+resultsNames(dds1)
 ```
 
 ```{r}
@@ -184,7 +210,7 @@ write.csv(TNBCvsNorm, file= "TNBC.csv")
 ```
 ```{r}
 TNBCvsNorm= na.omit(TNBCvsNorm)
-TNBC= TNBCvsNorm[abs(TNBCvsNorm$log2FoldChange) > 0 & TNBCvsNorm$padj < 0.01,]
+TNBC= TNBCvsNorm[abs(TNBCvsNorm$log2FoldChange) > 1 & TNBCvsNorm$padj < 0.01,]
 TNBC
 ```
 
@@ -192,8 +218,9 @@ TNBC
 
 ```{r}
 library(org.Hs.eg.db)
+library(AnnotationDbi)
 keys= rownames(TNBC)
-symbolsTNBC= select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+symbolsTNBC= AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
 head(symbolsTNBC)
 ```
 
@@ -202,101 +229,88 @@ TNBC= cbind(TNBC, symbolsTNBC$SYMBOL, symbolsTNBC$GENENAME)
 TNBC = data.frame(TNBC)
 head(TNBC)
 ```
-```{r}
-orderedTNBC= TNBC[order(TNBC$padj),]
-orderedTNBC
-```
-```{r}
-annotation_TNBC <- phenodata[9:16,]
-annotation_TNBC
-```
-```{r}
-TNBCidx <- which(TNBCvsNorm$padj <=0.01 & abs(TNBCvsNorm$log2FoldChange)>1)
-matTNBC <- assay(vsd)[rownames(vsd) %in% rownames(TNBCvsNorm[TNBCidx,]),][, 9:16]
-matTNBC = as.matrix(matTNBC)
-head(matTNBC)
-```
-```{r}
-library(pheatmap)
-pheatmap(matTNBC[1:20,])
-```
-
 
 ```{r}
-upregTNBC= orderedTNBC[orderedTNBC$log2FoldChange >0,]
-upregTNBC
+upregTNBC= TNBC[TNBC$log2FoldChange >1,]
+head(upregTNBC)
 ```
 ```{r}
-downregTNBC <-orderedTNBC[orderedTNBC$log2FoldChange <0,]
-downregTNBC
+downregTNBC <-TNBC[TNBC$log2FoldChange <1,]
+head(downregTNBC)
 
 ```
 ```{r}
 library(EnhancedVolcano)
 EnhancedVolcano(TNBC, lab= TNBC$symbolsTNBC.SYMBOL, x="log2FoldChange", y= 'padj', title= "Normal vs TNBC")
 ```
-
 ```{r}
-resultsNames(dds1)
+resSort <- TNBC[order(TNBC$padj),]
+library(pheatmap)
+topgenesTNBC= head(rownames(resSort), 20)
+matTNBC <- assay(rls)[, 9:16][topgenesTNBC,]
+matTNBC <- matTNBC - rowMeans(matTNBC)
+rownames(matTNBC) <- symbolsTNBC$SYMBOL[match(rownames(matTNBC), symbolsTNBC$ENTREZID)]
+pheatmap(mat = matTNBC)
 ```
 
 ```{r}
-resNorm_ERPR <- results(dds1, name="Subtype_ER.PR._vs_Normal")
+resNorm_ERPR <- results(dds1, name="Subtype_ERPRpos_vs_Normal")
 resNorm_ERPR
 write.csv(resNorm_ERPR, file = "ERPR.csv")
 ```
 ```{r}
 resNorm_ERPR = na.omit(resNorm_ERPR)
-ERPR = resNorm_ERPR[abs(resNorm_ERPR$log2FoldChange) >= 0 & resNorm_ERPR$padj < 0.01,]
+ERPR = resNorm_ERPR[abs(resNorm_ERPR$log2FoldChange) >= 1 & resNorm_ERPR$padj < 0.01,]
 ERPR
 ```
 ```{r}
 keys= rownames(ERPR)
-symbolERPR= select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+symbolERPR= AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
 head(symbolERPR)
 ```
 
 ```{r}
 ERPR = cbind(ERPR, symbolERPR$SYMBOL, symbolERPR$GENENAME)
-ERPR
+head(ERPR)
 ```
 ```{r}
-upregERPR = ERPR[ERPR$log2FoldChange > 0 & ERPR$padj < 0.01,]
+upregERPR = ERPR[ERPR$log2FoldChange > 1,]
 upregERPR= upregERPR[order(upregERPR$log2FoldChange, decreasing = TRUE),]
-upregERPR
+head(upregERPR)
 ```
 
 ```{r}
-downregERPR = ERPR[ERPR$log2FoldChange < 0 & ERPR$padj < 0.01,]
+downregERPR = ERPR[ERPR$log2FoldChange < 1,]
 downregERPR= downregERPR[order(downregERPR$log2FoldChange, decreasing = FALSE),]
-downregERPR
+head(downregERPR)
 ```
 ```{r}
 EnhancedVolcano(ERPR, lab = ERPR$`symbolERPR$SYMBOL`, x= "log2FoldChange", y= "padj")
 ```
 ```{r}
-ERPRidx <- which(resNorm_ERPR$padj <=0.01 & abs(resNorm_ERPR$log2FoldChange)>1)
-matERPR <- assay(vsd)[rownames(vsd) %in% rownames(resNorm_ERPR[ERPRidx,]),][, c(5:8, 13:16)]
-matERPR = as.matrix(matERPR)
-head(matERPR)
-```
-```{r}
-pheatmap(matERPR[1:20,])
+resSortERPR <- ERPR[order(ERPR$padj),]
+library(pheatmap)
+topgenesERPR= head(rownames(resSortERPR), 20)
+matERPR <- assay(rls)[, c(5:8, 13:16)][topgenesERPR,]
+matERPR <- matERPR - rowMeans(matERPR)
+rownames(matERPR) <- symbolERPR$SYMBOL[match(rownames(matERPR), symbolERPR$ENTREZID)]
+pheatmap(mat = matERPR)
 ```
 
+
 ```{r}
-resNorm_ER <- results(dds1, name= "Subtype_ER._vs_Normal")
+resNorm_ER <- results(dds1, name= "Subtype_ERpos_vs_Normal")
 resNorm_ER
 write.csv(resNorm_ER, file = "ER.csv")
 ```
 ```{r}
 resNorm_ER= na.omit(resNorm_ER)
-ER = resNorm_ER[abs(resNorm_ER$log2FoldChange) > 0 & resNorm_ER$padj < 0.01 ,]
+ER = resNorm_ER[abs(resNorm_ER$log2FoldChange) > 1 & resNorm_ER$padj < 0.01 ,]
 ER
 ```
 ```{r}
 keys = rownames(ER)
-symbolER = select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+symbolER = AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
 head(symbolER)
 ```
 
@@ -305,42 +319,40 @@ ER = cbind(ER, symbolER$SYMBOL, symbolER$GENENAME)
 ER
 ```
 ```{r}
-ERidx <- which(resNorm_ER$padj <=0.01 & abs(resNorm_ER$log2FoldChange)>1)
-matER <- assay(vsd)[rownames(vsd) %in% rownames(resNorm_ER[ERidx,]),][, c(1:4, 13:16)]
-matER = as.matrix(matER)
-head(matER)
-```
-```{r}
-pheatmap(matER[1:20,])
-```
-
-```{r}
-upregER = ER[ER$log2FoldChange > 0,]
+upregER = ER[ER$log2FoldChange > 1,]
 upregER = upregER[order(upregER$log2FoldChange, decreasing = TRUE),]
-upregER
+head(upregER)
 ```
 ```{r}
-downregER = ER[ER$log2FoldChange < 0,]
+downregER = ER[ER$log2FoldChange < 1,]
 downregER = downregER[order(downregER$log2FoldChange, decreasing = F),]
-downregER
+head(downregER)
 ```
 ```{r}
 EnhancedVolcano(ER, lab = ER$`symbolER$SYMBOL`, x= "log2FoldChange", y= "padj")
 ```
+```{r}
+resSortER <- ER[order(ER$padj),]
+topgenesER= head(rownames(resSortER), 20)
+matER <- assay(rls)[, c(1:4, 13:16)][topgenesER,]
+matER <- matER - rowMeans(matER)
+rownames(matER) <- symbolER$SYMBOL[match(rownames(matER), symbolER$ENTREZID)]
+pheatmap(mat = matER)
+```
 
 ```{r}
-resNorm_HER <- results(dds1, name="Subtype_HER2._vs_Normal")
+resNorm_HER <- results(dds1, name="Subtype_HER2pos_vs_Normal")
 resNorm_HER
 write.csv(resNorm_HER, file = "HER2.csv")
 ```
 ```{r}
 resNorm_HER= na.omit(resNorm_HER)
-HER = resNorm_HER[abs(resNorm_HER$log2FoldChange) > 0 & resNorm_HER$padj < 0.01,]
+HER = resNorm_HER[abs(resNorm_HER$log2FoldChange) > 1 & resNorm_HER$padj < 0.01,]
 HER
 ```
 ```{r}
 keys= rownames(HER)
-symbolHER = select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+symbolHER = AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
 head(symbolHER)
 ```
 ```{r}
@@ -348,37 +360,25 @@ HER = cbind(HER, symbolHER$SYMBOL, symbolHER$GENENAME)
 HER
 ```
 ```{r}
-HERidx <- which(resNorm_HER$padj <=0.01 & abs(resNorm_HER$log2FoldChange)>1)
-matHER <- assay(vsd)[rownames(vsd) %in% rownames(resNorm_HER[HERidx,]),][, c(1:4, 13:16)]
-matHER = as.matrix(matHER)
-head(matHER)
-```
-```{r}
-pheatmap(matHER[1:20,])
-```
-
-```{r}
-upregHER= HER[HER$log2FoldChange > 0,]
+upregHER= HER[HER$log2FoldChange > 1,]
 upregHER = upregHER[order(upregHER$log2FoldChange, decreasing = TRUE),]
-upregHER
+head(upregHER)
 ```
 ```{r}
-top20upregHER = upregHER[1:20, 7:8]
-top20upregHER
-```
-
-```{r}
-downregHER= HER[HER$log2FoldChange < 0,]
+downregHER= HER[HER$log2FoldChange < 1,]
 downregHER = downregHER[order(downregHER$log2FoldChange, decreasing = F),]
-downregHER
+head(downregHER)
 ```
-```{r}
-top20downregHER = downregHER[1:20, 7:8]
-top20downregHER
-```
-
 ```{r}
 EnhancedVolcano(HER, lab= HER$`symbolHER$SYMBOL`, x= "log2FoldChange", y= "padj")
+```
+```{r}
+resSortHER <- HER[order(HER$padj),]
+topgenesHER= head(rownames(resSortHER), 20)
+matHER <- assay(rls)[, 13:20][topgenesHER,]
+matHER <- matHER - rowMeans(matHER)
+rownames(matHER) <- symbolHER$SYMBOL[match(rownames(matHER), symbolHER$ENTREZID)]
+pheatmap(mat = matHER)
 ```
 
 ```{r}
