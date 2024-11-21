@@ -1,0 +1,364 @@
+---
+title: "Gene and Pathway Enrichment Analysis"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+## IMPORT NEEDED PACKAGES
+
+```{r}
+library(clusterProfiler)
+library(enrichplot)
+# we use ggplot2 to add x axis labels (ex: ridgeplot)
+library(ggplot2)
+library(org.Hs.eg.db)
+```
+# Triple Negative Breast Cancer
+## Import TNBC
+
+```{r}
+TNBC_df= read.csv("TNBC.csv", header = TRUE)
+head(TNBC_df)
+```
+```{r}
+TNBCgene_list = TNBC_df$log2FoldChange
+
+#name the vector
+names(TNBCgene_list) <- TNBC_df$X
+
+head(TNBCgene_list)
+```
+```{r}
+TNBCgene_list <- na.omit(TNBCgene_list)
+TNBCgene_list <- sort(TNBCgene_list, decreasing = TRUE)
+head(TNBCgene_list)
+```
+## Overrepresentaion analysis
+```{r}
+enrichedTNBC <- enrichGO(gene = names(TNBCgene_list),
+                         OrgDb = org.Hs.eg.db,
+                         keyType = "ENTREZID",
+                         ont = "ALL",
+                         pAdjustMethod = "BH")
+head(enrichedTNBC)
+```
+Visualizing enrichment results
+```{r}
+# First construct similarity matrix
+egoTNBC <- pairwise_termsim(enrichedTNBC)
+emapplot(egoTNBC)
+```
+## Gene Set Enrichment analysis
+```{r}
+gseTNBC <- gseGO(geneList=TNBCgene_list, 
+             ont ="ALL", 
+             keyType = "ENTREZID", 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Hs.eg.db, 
+             pAdjustMethod = "BH")
+```
+```{r}
+head(gseTNBC)
+```
+```{r}
+dotplot(gseTNBC, showCategory=10, split=".sign") + facet_grid(.~.sign)
+```
+Enrichment map for gene set enrichment analysis
+```{r}
+# Compute term similarity matrix
+egseaTNBC <- pairwise_termsim(gseTNBC)
+
+# Visualize results
+emapplot(egseaTNBC, showCategory = 30)
+```
+
+```{r}
+gseaplot(gseTNBC, by = "all", title = gseTNBC$Description[1], geneSetID = 1)
+```
+
+```{r}
+gseaplot(gseTNBC, by = "all", title = gseTNBC$Description[2], geneSetID = 2)
+```
+
+# KEGG Analysis
+## KEGG ORA
+
+```{r}
+keggORATNBC <- enrichKEGG(names(TNBCgene_list),
+                          organism = 'hsa',
+                          keyType = "ncbi-geneid")
+head(keggORATNBC)
+```
+
+```{r}
+eKEGG <- pairwise_termsim(keggORATNBC)
+emapplot(eKEGG)
+```
+
+```{r}
+kk2 <- gseKEGG(TNBCgene_list, organism = "hsa", keyType = "ncbi-geneid", pAdjustMethod = "BH")
+head(kk2)
+```
+```{r}
+dotplot(kk2, showCategory = 15, title= "Enriched pathways", split=".sign") + facet_grid(.~.sign)
+```
+
+
+```{r}
+kk2_ema <- pairwise_termsim(kk2)
+emapplot(kk2_ema)
+```
+
+
+```{r}
+library(pathview)
+pathview(gene.data = TNBCgene_list, pathway.id = "hsa04151", species = "hsa")
+```
+```{r}
+pathview(gene.data = TNBCgene_list, pathway.id = "hsa05200", species = "hsa")
+```
+```{r}
+pathview(gene.data = TNBCgene_list, pathway.id = "hsa04110", species = "hsa")
+```
+
+```{r}
+ridgeplot(kk2, showCategory = 15)+ labs( x= "Enrichment distribution")
+```
+
+# Estrogen/Progesterone positive BC
+## Import ERPR
+```{r}
+ERPR_df <- read.csv("ERPR.csv", header = TRUE)
+head(ERPR_df)
+```
+```{r}
+ERPR_genelist <- ERPR_df$log2FoldChange
+names(ERPR_genelist) <- ERPR_df$X
+head(ERPR_genelist)
+```
+```{r}
+ERPR_genelist <- na.omit(ERPR_genelist)
+ERPR_genelist <- sort(ERPR_genelist, decreasing = TRUE)
+head(ERPR_genelist)
+```
+
+## Overrepresentation analysis (ORA)
+```{r}
+enrichERPR <- enrichGO(gene = names(ERPR_genelist),
+                       keyType = "ENTREZID",
+                       OrgDb = org.Hs.eg.db,
+                       pAdjustMethod = "BH",
+                       ont = "ALL")
+head(enrichERPR)
+```
+```{r}
+egoERPR <- pairwise_termsim(enrichERPR)
+emapplot(egoERPR)
+```
+
+## Gene Set enrichment analysis of ER/PR+
+```{r}
+
+ERPRgse <- gseGO(geneList = ERPR_genelist,
+                 ont = "ALL",
+                 OrgDb = org.Hs.eg.db,
+                 keyType = "ENTREZID",
+                 pAdjustMethod = "BH")
+
+head(ERPRgse)
+```
+```{r}
+dotplot(ERPRgse, showCategory=10, split=".sign") + facet_grid(.~.sign)
+```
+```{r}
+egseaERPR <- pairwise_termsim(ERPRgse)
+emapplot(egseaERPR)
+```
+
+## KEGG Enrichment Analysis
+### Overrepresentation Analysis
+```{r}
+ORAERPRkegg <- enrichKEGG(names(ERPR_genelist),
+                       organism = "hsa",
+                       keyType = "ncbi-geneid")
+head(ORAERPRkegg)
+```
+```{r}
+ERPRKegg <- pairwise_termsim(ORAERPRkegg)
+emapplot(ERPRKegg)
+```
+
+## Gene Set Enrichment
+```{r}
+GSEKEGGERPR <- gseKEGG(geneList = ERPR_genelist,
+                       organism = 'hsa',
+                       keyType = "ncbi-geneid")
+head(GSEKEGGERPR)
+```
+```{r}
+dotplot(GSEKEGGERPR, showCategory = 15, split= ".sign") + facet_grid(.~.sign)
+```
+```{r}
+ridgeplot(GSEKEGGERPR, showCategory = 15)
+```
+
+```{r}
+gseaplot(GSEKEGGERPR, title = GSEKEGGERPR$Description[1], geneSetID = 1)
+```
+```{r}
+gseaplot(GSEKEGGERPR, title = GSEKEGGERPR$Description[2], geneSetID = 2)
+```
+
+```{r}
+pathview(gene.data = ERPR_genelist, pathway.id = "hsa05165", species = "hsa")
+```
+
+# Estrogen receptor positive BC
+```{r}
+ER_df <- read.csv("ER.csv", header = TRUE)
+head(ER_df)
+```
+```{r}
+ERgene_list <- ER_df$log2FoldChange
+names(ERgene_list) <- ER_df$X
+ERgene_list <- na.omit(ERgene_list)
+ERgene_list <- sort(ERgene_list, decreasing= TRUE)
+```
+
+## Gene Overrepresentation analysis
+```{r}
+ERORA <- enrichGO(gene = names(ERgene_list),
+                  OrgDb = org.Hs.eg.db,
+                  keyType = "ENTREZID",
+                  ont = "ALL")
+head(ERORA)
+```
+```{r}
+egoER <- pairwise_termsim(ERORA)
+emapplot(egoER)
+```
+
+## Gene set enrichment analysis
+```{r}
+gseaER <- gseGO(geneList <- ERgene_list, 
+                ont = "ALL",
+                OrgDb = org.Hs.eg.db)
+head(gseaER)
+```
+```{r}
+gseGOER <- pairwise_termsim(gseaER)
+emapplot(gseGOER)
+```
+```{r}
+dotplot(gseGOER, showCategory = 10, split= ".sign") + facet_grid(.~.sign)
+```
+
+## KEGG pathway enrichment analysis
+## ORA
+```{r}
+ORAERKegg <- enrichKEGG(gene = names(ERgene_list),
+                        organism = "hsa",
+                        keyType = "ncbi-geneid")
+head(ORAERKegg)
+```
+```{r}
+eKEGGER <- pairwise_termsim(ORAERKegg)
+emapplot(eKEGGER)
+```
+
+KEGG Enrichment Analysis
+```{r}
+enrKEGGER <- gseKEGG(ERgene_list, keyType = "ncbi-geneid")
+head(enrKEGGER)
+```
+```{r}
+dotplot(enrKEGGER, showCategory = 10, split= ".sign") + facet_grid(.~.sign)
+```
+```{r}
+ridgeplot(enrKEGGER, showCategory = 15)
+```
+```{r}
+pathview(gene.data = ERgene_list, pathway.id = "hsa01521")
+```
+
+# HER2+ breast cancer
+## ORA
+```{r}
+HER2_df <- read.csv("HER2.csv", header = TRUE)
+head(HER2_df)
+```
+```{r}
+HERgene_list <- HER2_df$log2FoldChange
+names(HERgene_list) <- HER2_df$X
+HERgene_list <- na.omit(HERgene_list)
+HERgene_list <- sort(HERgene_list, decreasing = TRUE)
+```
+
+## Overrepresentation Analysis
+```{r}
+library(org.Hs.eg.db)
+library(clusterProfiler)
+egoHER <- enrichGO(names(HERgene_list),
+                   OrgDb = org.Hs.eg.db,
+                   ont = "ALL",
+                   keyType = "ENTREZID")
+head(egoHER)
+```
+```{r}
+eoRAHER <- pairwise_termsim(egoHER)
+emapplot(eoRAHER)
+```
+```{r}
+HERgSE <- gseGO(geneList = HERgene_list,
+                ont = "ALL",
+                OrgDb = org.Hs.eg.db)
+```
+```{r}
+head(HERgSE)
+```
+```{r}
+dotplot(HERgSE, showCategory= 10, split= ".sign") + facet_grid(.~.sign)
+```
+
+## KEGG Enrichment
+### ORA
+```{r}
+HERKEGGORA <- enrichKEGG(names(HERgene_list), organism = "hsa", keyType = "ncbi-geneid")
+head(HERKEGGORA)
+```
+
+```{r}
+eKeggHER <- pairwise_termsim(HERKEGGORA)
+emapplot(eKeggHER)
+```
+
+KEGG Gene enrichment
+```{r}
+gseHERKEGG <- gseKEGG(HERgene_list, keyType = "ncbi-geneid")
+head(gseHERKEGG)
+```
+```{r}
+dotplot(gseHERKEGG, showCategory = 10, split = ".sign") + facet_grid(.~.sign)
+```
+
+```{r}
+ridgeplot(gseHERKEGG, showCategory = 15)
+```
+
+```{r}
+library(pathview)
+pathview(HERgene_list, pathway.id = "hsa04935")
+```
+
+```{r}
+pathview(HERgene_list, pathway.id = 'hsa04931')
+```
+
+```{r}
+sessionInfo()
+```
+
