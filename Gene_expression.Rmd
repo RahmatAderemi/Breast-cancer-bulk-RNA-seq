@@ -1,0 +1,336 @@
+---
+title: "Gene expression"
+author: "Rahmat"
+date: "2024-11-07"
+output: html_document
+---
+
+# Gene Expression analysis
+
+
+# IMPORTING COUNTS
+```{r}
+SRR1313090 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313090.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313090)
+```
+```{r}
+SRR1313091 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313091.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313091)
+```
+```{r}
+SRR1313092 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313092.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313092)
+```
+```{r}
+SRR1313093 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313093.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313093)
+```
+```{r}
+SRR1313148 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313148.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313148)
+```
+```{r}
+SRR1313149 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313149.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313149)
+```
+```{r}
+SRR1313150 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313150.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313150)
+```
+```{r}
+SRR1313151 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313151.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+```
+```{r}
+SRR1313204 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313204.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313204)
+```
+```{r}
+SRR1313205 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313205.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+
+```
+```{r}
+SRR1313206 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313206.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313206)
+```
+```{r}
+SRR1313208 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR1313208.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+head(SRR1313208)
+```
+
+```{r}
+SRR22891574 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR22891574.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+
+```
+```{r}
+SRR22891592 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR22891592.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+
+```
+```{r}
+SRR22891594 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR22891594.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+
+```
+```{r}
+SRR22891598 <- read.table("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Counts/SRR22891598.tabular", header= TRUE, row.names = 1, stringsAsFactors = TRUE)
+
+```
+
+# Merging counts data
+```{r}
+count_data <- cbind(SRR1313090,SRR1313091,SRR1313092,SRR1313093,SRR1313148,SRR1313149,SRR1313150,SRR1313151,SRR1313204,SRR1313205,SRR1313206,SRR1313208,SRR22891574,SRR22891592,SRR22891594,
+SRR22891598)
+head(count_data)
+```
+```{r}
+count_data <- count_data[!duplicated(rownames(count_data)), ]
+head(count_data)
+```
+```{r}
+library(readxl)
+phenodata <- read_excel("C:/Users/rahma/Documents/Breast cancer RNA-Seq/Metadata.xlsx")
+phenodata
+```
+Confirm the column names in counts data tallies with the rownames in the phenodata
+```{r}
+rownames(phenodata) = phenodata$`SRA Accession number`
+phenodata
+```
+```{r}
+rownames(phenodata)
+```
+```{r}
+colnames(count_data)
+```
+```{r}
+colnames(count_data) == rownames(phenodata)
+```
+```{r}
+phenodata$Subtype <- factor(phenodata$Subtype)
+class(phenodata$Subtype)
+phenodata$Subtype
+```
+```{r}
+phenodata$Subtype = relevel(phenodata$Subtype, ref = "Normal")
+phenodata$Subtype
+```
+
+# Creating a DESeq dataset
+```{r}
+library(DESeq2)
+library(genefilter)
+```
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = count_data, colData = phenodata, design = ~Subtype)
+dds
+```
+```{r}
+smallestGroupSize <- 3
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+dds
+```
+
+# Exploratory data analysis
+## Estimate sequencing depth
+```{r}
+dds <- estimateSizeFactors(dds)
+plot(sizeFactors(dds), colSums(counts(dds)))
+abline(lm(colSums(counts(dds))~ sizeFactors(dds)))
+```
+
+## Data transformation and Variance stabilization
+```{r}
+rls <- rlog(dds)
+plot(assay(rls)[,1], assay(rls)[,2], cex= .1)
+```
+```{r}
+library(vsn)
+meanSdPlot(assay(rls), main ="rlog transformation", ranks = FALSE)
+```
+```{r}
+plotPCA(rls, intgroup = "Subtype")
+```
+```{r}
+plotPCA(rls, intgroup= "Location")
+```
+
+## Hierarchical clustering
+```{r}
+plot(hclust(dist(t(assay(rls)))), labels= colData(rls)$Subtype)
+```
+# There might be some batch effects in the data. 
+```{r}
+library(sva)
+idx= rowMeans(counts(dds, normalized= TRUE)) >1
+dat <- counts(dds, normalized= TRUE)[idx,]
+mod<- model.matrix(~ Subtype, colData(dds))
+mod0 <- model.matrix(~1, colData(dds))
+
+svBC <- svaseq(dat, mod, mod0, n.sv = 2)
+dds$Location <- as.factor(dds$Location)
+plot(svBC$sv[,1], svBC$sv[,2], col= dds$Location)
+
+```
+```{r}
+dds.sva <- dds
+dds.sva$SV1 <- svBC$sv[,1]
+dds.sva$SV2 <- svBC$sv[,2]
+design(dds.sva) <- ~ SV1 + SV2 + Subtype
+```
+
+# Differential gene expression analysis
+```{r}
+dds1 <- DESeq(dds.sva)
+```
+```{r}
+resultsNames(dds1)
+```
+
+```{r}
+TNBCvsNorm= results(dds1)
+TNBCvsNorm
+write.csv(TNBCvsNorm, file= "TNBC.csv")
+
+```
+```{r}
+TNBCvsNorm= na.omit(TNBCvsNorm)
+TNBC= TNBCvsNorm[abs(TNBCvsNorm$log2FoldChange) > 1 & TNBCvsNorm$padj < 0.01,]
+TNBC
+```
+
+### Collecting the gene IDs from org.Hs.eg.db
+
+```{r}
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+keys= rownames(TNBC)
+symbolsTNBC= AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+head(symbolsTNBC)
+```
+
+```{r}
+TNBC= cbind(TNBC, symbolsTNBC$SYMBOL, symbolsTNBC$GENENAME)
+TNBC = data.frame(TNBC)
+head(TNBC)
+```
+
+```{r}
+upregTNBC= TNBC[TNBC$log2FoldChange >1,]
+head(upregTNBC)
+write.csv(upregTNBC, "upregTNBC.csv")
+```
+```{r}
+downregTNBC <-TNBC[TNBC$log2FoldChange <1,]
+head(downregTNBC)
+write.csv(downregTNBC, "downregTNBC.csv")
+
+```
+```{r}
+library(EnhancedVolcano)
+EnhancedVolcano(TNBC, lab= TNBC$symbolsTNBC.SYMBOL, x="log2FoldChange", y= 'padj', title= "Normal vs TNBC")
+```
+```{r}
+resSort <- TNBC[order(TNBC$padj),]
+library(pheatmap)
+topgenesTNBC= head(rownames(resSort), 20)
+matTNBC <- assay(rls)[, 5:12][topgenesTNBC,]
+matTNBC <- matTNBC - rowMeans(matTNBC)
+rownames(matTNBC) <- symbolsTNBC$SYMBOL[match(rownames(matTNBC), symbolsTNBC$ENTREZID)]
+pheatmap(mat = matTNBC)
+```
+
+
+```{r}
+resNorm_ER <- results(dds1, name= "Subtype_ERpos_vs_Normal")
+resNorm_ER
+write.csv(resNorm_ER, file = "ER.csv")
+```
+```{r}
+resNorm_ER= na.omit(resNorm_ER)
+ER = resNorm_ER[abs(resNorm_ER$log2FoldChange) > 1 & resNorm_ER$padj < 0.01 ,]
+ER
+```
+```{r}
+keys = rownames(ER)
+symbolER = AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+head(symbolER)
+```
+
+```{r}
+ER = cbind(ER, symbolER$SYMBOL, symbolER$GENENAME)
+ER
+```
+```{r}
+upregER = ER[ER$log2FoldChange > 1,]
+upregER = upregER[order(upregER$log2FoldChange, decreasing = TRUE),]
+head(upregER)
+write.csv(upregER, "upregER.csv")
+```
+```{r}
+downregER = ER[ER$log2FoldChange < 1,]
+downregER = downregER[order(downregER$log2FoldChange, decreasing = F),]
+head(downregER)
+write.csv(downregER, "downregER.csv")
+```
+```{r}
+EnhancedVolcano(ER, lab = ER$`symbolER$SYMBOL`, x= "log2FoldChange", y= "padj")
+```
+```{r}
+resSortER <- ER[order(ER$padj),]
+topgenesER= head(rownames(resSortER), 20)
+matER <- assay(rls)[, c(1:4, 9:12)][topgenesER,]
+matER <- matER - rowMeans(matER)
+rownames(matER) <- symbolER$SYMBOL[match(rownames(matER), symbolER$ENTREZID)]
+pheatmap(mat = matER)
+```
+
+```{r}
+resNorm_HER <- results(dds1, name="Subtype_HER2pos_vs_Normal")
+resNorm_HER
+write.csv(resNorm_HER, file = "HER2.csv")
+```
+```{r}
+resNorm_HER= na.omit(resNorm_HER)
+HER = resNorm_HER[abs(resNorm_HER$log2FoldChange) > 1 & resNorm_HER$padj < 0.01,]
+HER
+```
+```{r}
+keys= rownames(HER)
+symbolHER = AnnotationDbi::select(org.Hs.eg.db, keys = keys, keytype = "ENTREZID", columns = c("SYMBOL", "GENENAME"))
+head(symbolHER)
+```
+```{r}
+HER = cbind(HER, symbolHER$SYMBOL, symbolHER$GENENAME)
+HER
+```
+```{r}
+upregHER= HER[HER$log2FoldChange > 1,]
+upregHER = upregHER[order(upregHER$log2FoldChange, decreasing = TRUE),]
+head(upregHER)
+write.csv(upregHER, "upregHER.csv")
+```
+```{r}
+downregHER= HER[HER$log2FoldChange < 1,]
+downregHER = downregHER[order(downregHER$log2FoldChange, decreasing = F),]
+head(downregHER)
+write.csv(downregHER, "downregHER.csv")
+```
+```{r}
+EnhancedVolcano(HER, lab= HER$`symbolHER$SYMBOL`, x= "log2FoldChange", y= "padj")
+```
+```{r}
+resSortHER <- HER[order(HER$padj),]
+topgenesHER= head(rownames(resSortHER), 20)
+matHER <- assay(rls)[, 9:16][topgenesHER,]
+matHER <- matHER - rowMeans(matHER)
+rownames(matHER) <- symbolHER$SYMBOL[match(rownames(matHER), symbolHER$ENTREZID)]
+pheatmap(mat = matHER)
+```
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
