@@ -112,6 +112,22 @@ phenodata$Subtype
 phenodata$Subtype = relevel(phenodata$Subtype, ref = "Normal")
 phenodata$Subtype
 ```
+# Transform
+```{r}
+logcounts = log1p(count_data)
+logcounts
+```
+
+```{r}
+seq_info <- phenodata
+seq_info$total_counts <- colSums(count_data)
+seq_info
+```
+
+```{r}
+ggplot(seq_info, mapping= aes(x= Subtype, y=total_counts))+
+  geom_boxplot(fill= "red")
+```
 
 # Creating a DESeq dataset
 ```{r}
